@@ -1,0 +1,15 @@
+version: "3"
+services:
+  db:
+    image: "postgres"
+    container_name: "postgres-container"
+    environment:
+      - POSTGRES_USER=root
+      - POSTGRES_PASSWORD=root
+      - POSTGRES_DB=kuma_database
+    ports:
+      - "54320:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+volumes:
+  postgres_data:

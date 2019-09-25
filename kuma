@@ -1,0 +1,136 @@
+---- Les variables d'environement:
+
+kuma-0.1.1-ubuntu# export PATH=$PATH:./bin
+
+---- Lancement du control plan: Creation du service mesh default
+---- Backend storage in memory (by default)
+
+kuma-cp run
+
+---- Lacement d'un service pour le test:
+
+kuma-tcp-echo -port 9000
+
+---- Creation d'un Data plane entity:
+
+echo "type: Dataplane
+mesh: default
+name: dp-echo-1
+networking:
+  inbound:
+  - interface: 127.0.0.1:10000:9000
+    tags:
+      service: echo" | kumactl apply -f -
+
+---- Lancement du data plane process:
+
+KUMA_CONTROL_PLANE_BOOTSTRAP_SERVER_URL=http://127.0.0.1:5682 \
+  KUMA_DATAPLANE_MESH=default \
+  KUMA_DATAPLANE_NAME=dp-echo-1 \
+  kuma-dp run
+
+---- Application des regles (securite ...): TLS
+
+echo "type: Mesh
+name: default
+mtls:
+  enabled: true 
+  ca:
+    builtin: {}" | kumactl apply -f -
+
+---- Verification:
+
+curl http://localhost:10000
+
+---- Commandes utiles:
+
+kumactl get meshes
+kumactl get dataplanes
+kumactl inspect dataplanes
+
+
+---------- Exemple avec postgres
+
+docker pull postres
+
+docker run --name postgres-container \
+ -e POSTGRES_USER=root \
+ -e POSTGRES_PASSWORD=root\
+ -e POSTGRES_DB=kuma_database \
+ -p 5432:5432 \
+ -v postgres_data:/var/lib/postgresql/data \
+ -d postgres
+
+docker exec -it postgres-container sh
+
+psql -h localhost -U root -d  kuma_database
+
+---- Creation de la table resource:
+
+CREATE TABLE IF NOT EXISTS resources (
+    name        varchar(100) NOT NULL,
+    namespace   varchar(100) NOT NULL,
+    mesh        varchar(100) NOT NULL,
+    type        varchar(100) NOT NULL,
+    version     integer NOT NULL,
+    spec        text,
+    PRIMARY KEY (name, namespace, mesh, type)
+);
+
+---- Lancement du control plane:
+
+KUMA_STORE_TYPE=postgres \
+KUMA_STORE_POSTGRES_HOST=localhost \
+KUMA_STORE_POSTGRES_PORT=5432 \
+KUMA_STORE_POSTGRES_USER=root \
+KUMA_STORE_POSTGRES_PASSWORD=root \
+KUMA_STORE_POSTGRES_DB_NAME=kuma_database \
+kuma-cp run
+
+---- Creation des services:
+
+********** server service:
+
+echo "type: Dataplane
+mesh: default
+name: node-server-1
+networking:
+  inbound:
+  - interface: 127.0.0.1:30000:3000
+    tags:
+      service: node-server" | kumactl apply -f -
+
+
+KUMA_CONTROL_PLANE_BOOTSTRAP_SERVER_URL=http://localhost:5682 \
+KUMA_DATAPLANE_MESH=default \
+KUMA_DATAPLANE_NAME=node-server-1 \
+kuma-dp run
+
+********* client service:
+
+echo "type: Dataplane
+mesh: default
+name: node-client-1
+networking:
+  inbound:
+  - interface: 127.0.0.1:30001:3001
+    tags:
+      service: node-client
+  outbound:
+  - interface: :40000
+    service: node-server" | kumactl apply -f -
+
+KUMA_CONTROL_PLANE_BOOTSTRAP_SERVER_URL=http://localhost:5682 \
+KUMA_DATAPLANE_MESH=default \
+KUMA_DATAPLANE_NAME=node-client-1 \
+kuma-dp run
+
+
+
+
+
+
+
+
+
+
